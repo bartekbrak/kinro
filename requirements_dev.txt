@@ -1,0 +1,6 @@
+ipython
+flake8
+isort
+django-extensions
+pretty_repr
+pytest

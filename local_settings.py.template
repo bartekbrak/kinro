@@ -1,0 +1,32 @@
+from django.db import models
+import pretty_repr
+
+DEBUG = True
+SECRET_KEY = "whatever, we're not using forms are we?"
+ALLOWED_HOSTS = []
+
+SHELL_PLUS_POST_IMPORTS = (
+    # examples:
+    # ('module.submodule1', ('class1', 'function2')),
+    # ('module.submodule2', 'function3'),
+    # ('module.submodule3', '*'),
+    ('core.utils', '*'),
+    ('core.models', 'Month'),
+)
+
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'core',
+    # the only addition
+    'django_extensions',
+]
+
+
+# Let all models have the same, human-readable text representation, useful for shell_plus.
+models.Model.__repr__ = pretty_repr.indented_django_repr

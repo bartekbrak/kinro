@@ -1,0 +1,200 @@
+{% load static from static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kinro</title>
+<link rel='stylesheet' href='{% static "core/fullcalendar.css" %}' />
+<link rel='stylesheet' href='{% static "core/jquery.jsonview.min.css" %}' />
+<script src='{% static "core/jquery-3.1.0.min.js" %}'></script>
+<script src='{% static "core/moment.min.js" %}'></script>
+<script src='{% static "core/fullcalendar.js" %}'></script>
+<script src='{% static "core/jquery.jsonview.min.js" %}'></script>
+<script>
+
+
+$(document).ready(function() {
+    var status = $('#status');
+    $('#calendar').fullCalendar({
+        header: {
+            left:  'prev,next, title',
+            right:   '',
+            center: '',
+        },
+        // The only view, deal with this, no days, no months, just look at the week
+        defaultView: 'agendaWeek',
+        firstDay: 1, // monday
+        allDayDefault: false, // probably unnecessary
+        allDaySlot: false, // probably unnecessary
+        weekNumbers: true,
+        eventSources: [
+            {
+                url: '{% url "time_spans" %}',
+            },
+            {
+                url: '{% url "work_hours" %}'
+            },
+            {
+                url: '{% url "comments" %}',
+                className: 'comments'
+            },
+        ],
+        eventMouseover: function (event, jsEvent, view) {
+            // Show time_span title and more in status bar on hover. It often does not fit.
+            if (event.source.className[0] == 'comments') {
+                // comments have no time, displayed differntly
+                status.html(`<b>${event.title}</b>`);
+                return
+            }
+            // FIXME: format('mm') will MISS hours, I couldn't figure out how to do deltas in moment.js
+            status.html(
+                    `${event.start.format('h:mm')} - ${event.end.format('h:mm')} ` +
+                    `(${moment(event.end - event.start).format('mm')})` +
+                    `<b>${event.title}</b>`
+            );
+        },
+        viewRender: function(view, element) {
+            $.ajax({
+                url: `/insight/` +
+                `${view.start.format()}/${view.end.clone().subtract(1, 'days').format()}`,
+            }).done(function (data) {
+                $("#json").JSONView(data, { collapsed: true });
+                $.each(data, function(index, day) {
+                    var header = $(`th.fc-day-header[data-date="${day.date}"]`);
+                    if (day.enough) {
+                        header.addClass('is_enough');
+                        header.removeClass('not_enough');
+                    } else {
+                        header.addClass('not_enough');
+                        header.removeClass('is_enough');
+                    }
+                    header.append(`<br>${day.display}`);
+                });
+            });
+        },
+    });
+    $("#more table td").click(function(){
+        // soon: remove TD
+        // console.log('$(this)', $(this));
+    });
+});
+</script>
+    <style>
+        * {
+            font-family: "Lucida Grande", Helvetica, Arial, Verdana, sans-serif
+        }
+        #calendar {
+            margin: 0 auto;
+            width: 1500px;
+            display: inline-block;
+            vertical-align: top;
+        }
+        #status {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 20px;
+            text-align: center;
+            background-color: grey;
+            z-index: 10;
+            color: whitesmoke;
+        }
+        .days{
+            background: repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(192,192,192,0.5) 10px,
+                    rgba(192,192,192,0.5) 20px
+            );
+        }
+        .is_enough {
+            background-color: rgba(0, 255, 0, 0.50);
+        }
+        .not_enough {
+            background-color: rgba(255, 0, 0, 0.50);
+        }
+        .fc-v-event {
+            cursor: crosshair;
+        }
+        #more {
+{#            border: 1px solid green;#}
+            display: block;
+            float: right;
+            min-width: 20%;
+        }
+        .comments {
+            /* makes this a black dot, which upon hoover fill status bar with the comment */
+            left:90% !important;
+            background: black !important;
+            border: none;
+            border-radius: 10px;
+            width: 20px;
+            height: 20px;
+            color: black;
+            font-size: 0;
+        }
+        .mono, .mono * {
+            font-family: monospace;
+        }
+        .switches-table {
+            padding: 5px;
+        }
+        .switches-table td {
+            padding: 2px 4px 2px 4px;
+            border-style: solid;
+            border-width: 0 1px 1px 0;
+        }
+        a.color-button {
+            width:100px;
+            display: block;
+            height:15px;
+            color: whitesmoke;
+            font-weight: bold;
+            text-decoration: none;
+            text-align: center;
+
+        }
+        a.color-button:hover {
+            color:red;
+            text-decoration: underline;
+
+        }
+
+    </style>
+</head>
+<body>
+
+<br>
+<div id="calendar"></div>
+<div id="more">
+    <a href="/admin" target="_blank">admin</a>
+    <hr>
+    {# FIXME: use % url % #}
+    <a href="/admin/core/timespan/add/" target="_blank">Add time span in admin.</a>
+    <a href="/admin/core/bucket/add/" target="_blank">Add bucket in admin.</a>
+    <hr>
+        <table class="mono switches-table">
+        {% for ts in running %}
+            <tr>
+                <td><a href="/stop/{{ ts.bucket.tag }}" class="color-button" style="background-color:{{ ts.bucket.color }};" target="_blank">Stop</a></td>
+                <td>{{ ts.bucket.tag }}</td>
+                <td>{{ ts.bucket.title|truncatechars:40 }}</td>
+            </tr>
+        {% endfor %}
+            <tr><td style="padding-bottom: 20px;border:none"></td></tr>
+        {% for bucket in recent %}
+            <tr>
+                <td><a href="/start/{{ bucket.tag }}" class="color-button" style="background-color:{{ bucket.color }};" target="_blank">Start</a></td>
+                <td>{{ bucket.tag }}</td>
+                <td>{{ bucket.title|truncatechars:40 }}</td>
+            </tr>
+        {% endfor %}
+        </table>
+    <div1 id="json" ></div1>
+</div>
+<div id="status">Status goes here</div>
+
+</body>
+</html>
