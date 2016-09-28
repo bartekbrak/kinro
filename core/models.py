@@ -86,6 +86,7 @@ class TimeSpan(models.Model):
 
     def save(self, *args, **kwargs):
         self.bucket.last_started = self.start
+        self.bucket.save()
         super().save(*args, **kwargs)
 
 
