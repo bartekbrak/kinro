@@ -80,10 +80,6 @@ class TimeSpan(models.Model):
         """If the span hasn't finished, for calculations' reasons, pretend it's finished now."""
         return self.end or datetime.now()
 
-    def finish(self):
-        self.end = datetime.now()
-        self.save()
-
     def save(self, *args, **kwargs):
         self.bucket.last_started = self.start
         self.bucket.save()
@@ -156,7 +152,6 @@ class Day(models.Model):
     # start, end defaults are bad, make sure to reset to the same value for saturday and sundays
     work_starts = models.TimeField(default='09:00', null=True, blank=True)
     work_ends = models.TimeField(default='17:00', null=True, blank=True)
-    worked = models.IntegerField(default=0, null=True, blank=True)  # seconds
 
     def planned_delta(self):
         # FIXME: name, not a delta, delta value in seconds
@@ -168,11 +163,6 @@ class Day(models.Model):
 
     def focus_factor(self):
         return self.timespan_set.focus_factor()
-
-    def finish(self):
-        """Calculate that day's caches. The work is finished"""
-        self.worked = self.timespan_set.merged_total()
-        self.save()
 
     def __str__(self):
         return '{:%Y-%m-%d}'.format(self.date)

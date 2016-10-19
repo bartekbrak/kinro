@@ -36,11 +36,8 @@ class BucketAdmin(admin.ModelAdmin):
 
 
 class DayAdmin(admin.ModelAdmin):
-    list_display = ('day_of_week', 'date', 'worked_hours', 'planned_delta')
+    list_display = ('day_of_week', 'date', 'planned_delta')
     ordering = ('-date',)
-
-    def worked_hours(self, obj):
-        return to_human_readable_in_hours(obj.worked or 0)
 
     def day_of_week(self, obj):
         return obj.date.strftime('%A')
