@@ -102,8 +102,9 @@ class Bucket(models.Model):
     title = models.CharField(max_length=128)
     # front-end may use this to allow links as titles
     url = models.URLField(null=True, blank=True)
-    # in hours or whatever you like, will be used to set alarms, now purely informational
-    estimate = models.IntegerField(null=True, blank=True)
+    # in hours or whatever you like, might be used to set alarms, currently purely informational
+    # FIXME: decimals, how to 4.5hrs here?
+    estimate = models.FloatField(null=True, blank=True)
     color = RGBColorField(colors=palette)
     # for simplicity of obtaining recent buckets, filled on TimeSpan.save
     last_started = models.DateTimeField(null=True, blank=True)
