@@ -10,6 +10,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
+    'mptt',
 ]
 
 MIDDLEWARE_CLASSES = [
@@ -54,7 +55,7 @@ USE_TZ = False
 STATIC_URL = '/static/'
 
 # How many days are recent to you? Used for proposing recent buckets to re-use.
-RECENT_DAYS = 10
+RECENT_DAYS = 14
 
 
 try:

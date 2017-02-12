@@ -59,3 +59,46 @@ def make_list_unique(seq):
     seen = set()
     seen_add = seen.add
     return [x for x in seq if not (x in seen or seen_add(x))]
+
+
+def contrasting_text_color(hex_str):
+    # http://stackoverflow.com/a/37603471/1472229
+    # http://codepen.io/WebSeed/full/pvgqEq/
+    # there's a copy of this in frontend
+    if hex_str.startswith('#'):
+        hex_str = hex_str[1:]
+    r, g, b = hex_str[:2], hex_str[2:4], hex_str[4:]
+    if 1 - (int(r, 16) * 0.299 + int(g, 16) * 0.587 + int(b, 16) * 0.114) / 255 < 0.5:
+        return 'black'
+    else:
+        return 'white'
+
+
+def draw_progress_bar(done, planned, label='', bg_color='#a9a9a9', extra_css=''):
+    # in seconds, dude
+    if planned == 0 and done == 0:
+        progress = 0
+    else:
+        progress = done / planned * 100
+    balance = done - planned
+    label = '%i%% %s' % (progress, label)
+    capped_progress = 100 if progress > 100 else progress
+    hover = '{done} of {planned} ({sign}{balance})'.format(
+        done=to_human_readable_in_hours(int(done)),
+        planned=to_human_readable_in_hours(int(planned)),
+        sign='+' if balance > 0 else '',
+        balance=to_human_readable_in_hours(int(balance)),
+    )
+    color = contrasting_text_color(bg_color)
+    return '''
+    <div class="progress" style="{extra_css}" title="{hover}">
+        <div class="progress_label" style="color:{color}">{label}</div>
+        <div class="progress_bar" style="width:{width}%; background-color:{bg_color}"></div>
+      </div>
+    '''.format(
+        label=label, width=capped_progress, hover=hover, bg_color=bg_color,
+        color=color, extra_css=extra_css)
+
+
+def date_range(from_date, to_date):
+    return [from_date + timedelta(days=d) for d in range(0, (to_date-from_date).days + 1)]

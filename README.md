@@ -3,7 +3,7 @@
 Goals:
 
 * Visualize one's workday patterns.
-* Calculate focus factor - time spent working focused vs idle work time
+* Calculate focus factor - time spent working focused vs idle work time (disabled for the moment)
 * Calculate other metrics, averages
 
 More broadly:
@@ -26,7 +26,6 @@ The goal is to keep it simple, close to real life.
 * TimeSpan - activity with start and end
 * Bucket - TimeSpans fall into buckets, buckets are for measuring time 
 spent on something
-* Client - Collects buckets, doesn't do much at the moment, for the record.
 
 See the docstrings for longer musings
 
@@ -88,6 +87,8 @@ windows, gods!
 
 # History and Changelog
 
+* 2017-02-12 Clean up, add daily target module, many UI improvements, I consider this to be good
+  enough to release to public
 * 2016-09-27 Version 1: alpha, I've been using tha app for two months, 
 testing ideas and arriving at some stable minimal base
 * 2016-07-22 no version, enough code to start logging

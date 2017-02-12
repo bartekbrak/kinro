@@ -1,200 +1,407 @@
 {% load static from static %}
+{# JS variant: ECMAScript 6, reuiqres modern browser. #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Kinro</title>
+<meta charset="UTF-8">
+<title>K: {{ title }}</title>
 <link rel='stylesheet' href='{% static "core/fullcalendar.css" %}' />
-<link rel='stylesheet' href='{% static "core/jquery.jsonview.min.css" %}' />
+{# Required by fullcalendar.js and code in this file #}
 <script src='{% static "core/jquery-3.1.0.min.js" %}'></script>
+{# Required by fullcalendar.js #}
 <script src='{% static "core/moment.min.js" %}'></script>
+{# Displays the google calendar like grid #}
 <script src='{% static "core/fullcalendar.js" %}'></script>
-<script src='{% static "core/jquery.jsonview.min.js" %}'></script>
 <script>
 
 
+let contrastiveColor = function (color) {
+    /* Buckets have colours, these colours are used as backgrounds. This function produces a font
+    color that will be visible on a given vackground color. Either black or white
+
+    http://stackoverflow.com/a/3943023/1472229
+     http://jsfiddle.net/cu4z27m7/66/
+     */
+    color = (color.charAt(0) == "#") ? color.substring(1, 7) : color;
+    let r = parseInt(color.substring(0, 2), 16);
+    let g = parseInt(color.substring(2, 4), 16);
+    let b = parseInt(color.substring(4, 6), 16);
+    let uicolors = [r / 255, g / 255, b / 255];
+    let c = uicolors.map((c) => {
+        if (c <= 0.03928) {
+            return c / 12.92;
+        } else {
+            return Math.pow((c + 0.055) / 1.055, 2.4);
+        }
+    });
+
+    const L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    return (L > 0.179) ? '#000000' : '#ffffff';
+};
+
+let human = function(s) {
+    /* Convert seconds to hours and minutes, round down the leftover. Works with negative time too.
+    */
+    let sign = '';
+    if (s < 0) {
+        sign = '-';
+        s = Math.abs(s)
+    }
+    let m = Math.floor(s/60);
+    let h = Math.floor(m/60);
+    m = m % 60;
+    if (m < 10) m = '0' + m;
+    return `${sign}${h}:${m}`
+};
+
+let progress_bar = function(done, planned, extra_classes, label='', bg_color='#a9a9a9') {
+    /* Returns HTML for bucket progressbar.
+    args:
+        done: seconds spend on the bucket
+        planned: seconds planned for the bucket
+
+    */
+    done = parseInt(done);
+    planned = parseInt(planned);
+    let sign = '';
+    let progress = (planned == 0 && done == 0) ? 0 : parseInt(done / planned * 100);
+    let balance = done - planned;
+    label = `${progress}%&nbsp;${label}`;
+    let width = progress > 100 ? 100: progress;
+    if (balance > 0) {sign= '+'}
+
+    let hover = `${human(done)} of ${human(planned)} (${sign}${human(balance)})`;
+    let color = contrastiveColor(bg_color);
+    return `
+        <div class="progress${extra_classes}" title="${hover}">
+            <div class="progress_label" style="color:${color}">${label}</div>
+            <div class="progress_bar" style="width:${width}%; background-color:${bg_color}"></div>
+            </div>
+    `
+};
+
 $(document).ready(function() {
-    var status = $('#status');
+    /* follower is a tooltip like div that follows mouse and displays details about some objects */
+    let follower = $('#follower');
+
     $('#calendar').fullCalendar({
         header: {
             left:  'prev,next, title',
             right:   '',
             center: '',
         },
-        // The only view, deal with this, no days, no months, just look at the week
+        // I plan to only support week view; day makes no sense, you want to observe patterns,
+        // right? Monthly would be cool but would extra work and complexity and would be used rarely
         defaultView: 'agendaWeek',
         firstDay: 1, // monday
-        allDayDefault: false, // probably unnecessary
-        allDaySlot: false, // probably unnecessary
+        // We don't add time spans dynamically yet, when we do, we won't have all day events.
+        allDayDefault: false,
+        // hides unused part of the table
+        allDaySlot: false,
+        // You can hide part of the day, you shouldn't be wroking at night anyway
+        // minTime: '06:00:00',
         weekNumbers: true,
+        // red bar indicating current time, moves dynamically
+        nowIndicator: true,
         eventSources: [
             {
                 url: '{% url "time_spans" %}',
             },
-            {
-                url: '{% url "work_hours" %}'
-            },
-            {
-                url: '{% url "comments" %}',
-                className: 'comments'
-            },
         ],
+        eventMouseout: function (event, jsEvent, view) {
+            follower.hide();
+        },
         eventMouseover: function (event, jsEvent, view) {
-            // Show time_span title and more in status bar on hover. It often does not fit.
-            if (event.source.className[0] == 'comments') {
-                // comments have no time, displayed differntly
-                status.html(`<b>${event.title}</b>`);
-                return
+            /* Sometimes, the time span is so short that you can't see the details. This shows
+            the follower with all the details, and the comment.
+
+            utc has to be there for correct values, don't know why, didn't bother
+            */
+            //
+            follower.html(`
+                ${event.start.format('h:mm')} - ${event.end.format('h:mm')}
+                (${moment.utc(event.end.diff(event.start)).format('HH:mm')})
+                - ${event.title}
+                ${event.comment? '' + event.comment : ''}
+            `).show();
+        },
+        eventClick: function(event, jsEvent, view) {
+            /* Timespan click opens its admin page.
+            Control-click bucket's admin.
+            It would be nice to describe this in the UI.
+             */
+            if (jsEvent.originalEvent.ctrlKey) {
+                window.open(event.bucket_url);
+            } else {
+                window.open(event.url);
             }
-            // FIXME: format('mm') will MISS hours, I couldn't figure out how to do deltas in moment.js
-            status.html(
-                    `${event.start.format('h:mm')} - ${event.end.format('h:mm')} ` +
-                    `(${moment(event.end - event.start).format('mm')})` +
-                    `<b>${event.title}</b>`
-            );
+            return false;
         },
         viewRender: function(view, element) {
+            /*
+            Called when dashboard is first loaded and when change week buttons are pressed.
+            Renders Insight progress bars.
+            */
+            // Append add-target button to every day label
+            $('th.fc-day-header').each(function() {
+                let date_str = $(this).data('date');
+                $(this).append(
+                    // FIXME: use % url % but how to pass JS there?
+                    `<a
+                        href="/admin/core/dailytarget/add/?date=${date_str}"
+                        title="Add daily target"
+                        target="_blank">+</a>
+                    `
+                );
+            });
+            let start = view.start.format();
+            let end = view.end.clone().subtract(1, 'days').format();
             $.ajax({
-                url: `/insight/` +
-                `${view.start.format()}/${view.end.clone().subtract(1, 'days').format()}`,
+                // FIXME: You can't use { % url % } so remember to change this when urls change
+                url: `/insight/${start}/${end}`,
             }).done(function (data) {
-                $("#json").JSONView(data, { collapsed: true });
-                $.each(data, function(index, day) {
-                    var header = $(`th.fc-day-header[data-date="${day.date}"]`);
-                    if (day.enough) {
-                        header.addClass('is_enough');
-                        header.removeClass('not_enough');
-                    } else {
-                        header.addClass('not_enough');
-                        header.removeClass('is_enough');
-                    }
-                    header.append(`<br>${day.display}`);
+                $.each(data, function(date, buckets) {
+                    let header = $(`th.fc-day-header[data-date="${date}"]`);
+                    $.each(buckets, function(id, insight) {
+                        if (insight.local) {
+                            header.append(progress_bar(
+                                insight.done, insight.planned, ' local', insight.title,
+                                insight.color
+                            ));
+                        }
+                        if (insight.display) {
+                            header.append(progress_bar(
+                                insight.done_cumulative, insight.planned_cumulative, '',
+                                insight.title, insight.color
+                            ));
+                        }
+                    });
                 });
             });
+            // Adding Insight progress bars changes callendar height, make it fit again
+            $('#calendar').fullCalendar('option', 'height', $(window).height());
         },
+        defaultDate: {{ defaultDate|safe }},
+        eventRender: function( event, element, view ) {
+            /*
+            Add comment class to timepsans with comments. I think there's some better way too,
+            maybe backend side
+             */
+            if (event.comment) {
+                $(element).addClass('with-comment');
+            }
+        },
+
     });
-    $("#more table td").click(function(){
-        // soon: remove TD
-        // console.log('$(this)', $(this));
+    /*
+    Controls is the bar with running buckets and some links.
+    It's ugly. It works alright.
+    When you start a bucket, it's best to refresh the page because the new event won't be added,
+    same with stopiing.
+    FIXME: add new events on click.
+    FIXME: Display the tree of buckets, not just recent buckets.
+     */
+    $(document).on('mouseenter', '#controls', function() {
+        $(this).css({ height: "100%"});
+    }).on('mouseleave', '#controls', function() {
+        $(this).css({ height: "25"});
+    });
+    $('.color-button').click(function() {
+        const clicked_element = $(this);
+        let href = clicked_element.data('href');
+        let title = clicked_element.data('title');
+        $.ajax({
+            url: href,
+        }).fail(function( data, textStatus, jqXHR ) {
+            $('#controls_handle').html(data.responseText);
+        }).done(function( data, textStatus, jqXHR ) {
+            if (href.includes('start')) {
+                clicked_element.appendTo('#running');
+                clicked_element.data('href', href.replace('start', 'stop'));
+                document.title = 'K: ' + clicked_element.data('title');
+                $('#controls_handle').html(`Started ${title}`);
+            } else if (href.includes('stop')) {
+                clicked_element.data('href', href.replace('stop', 'start'));
+                clicked_element.prependTo('#recently_used');
+                $('#controls_handle').html(`stopped ${title}`);
+                document.title = 'K '
+            }
+        });
+    });
+    // Make the follower follow mouse
+    $(document).on('mousemove', function(e){
+        $('#follower').css({
+            left:  e.pageX,
+            top:   e.pageY
+        });
     });
 });
 </script>
     <style>
-        * {
+        /* Needs cleaning */
+        html {
             font-family: "Lucida Grande", Helvetica, Arial, Verdana, sans-serif
         }
-        #calendar {
-            margin: 0 auto;
-            width: 1500px;
-            display: inline-block;
-            vertical-align: top;
-        }
-        #status {
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 20px;
-            text-align: center;
-            background-color: grey;
-            z-index: 10;
-            color: whitesmoke;
-        }
-        .days{
-            background: repeating-linear-gradient(
-                    45deg,
-                    transparent,
-                    transparent 10px,
-                    rgba(192,192,192,0.5) 10px,
-                    rgba(192,192,192,0.5) 20px
-            );
-        }
-        .is_enough {
-            background-color: rgba(0, 255, 0, 0.50);
-        }
-        .not_enough {
-            background-color: rgba(255, 0, 0, 0.50);
-        }
-        .fc-v-event {
-            cursor: crosshair;
-        }
-        #more {
-{#            border: 1px solid green;#}
+        /* bucket buttons in control */
+        div.color-button {
             display: block;
-            float: right;
-            min-width: 20%;
-        }
-        .comments {
-            /* makes this a black dot, which upon hoover fill status bar with the comment */
-            left:90% !important;
-            background: black !important;
-            border: none;
-            border-radius: 10px;
-            width: 20px;
-            height: 20px;
-            color: black;
-            font-size: 0;
-        }
-        .mono, .mono * {
-            font-family: monospace;
-        }
-        .switches-table {
-            padding: 5px;
-        }
-        .switches-table td {
-            padding: 2px 4px 2px 4px;
-            border-style: solid;
-            border-width: 0 1px 1px 0;
-        }
-        a.color-button {
-            width:100px;
-            display: block;
-            height:15px;
-            color: whitesmoke;
+            line-height:1.5em;
+            padding: 5px 20px;
             font-weight: bold;
             text-decoration: none;
-            text-align: center;
-
         }
-        a.color-button:hover {
-            color:red;
-            text-decoration: underline;
+        div.color-button:hover {
+            cursor: pointer;
+            text-shadow: 0 0 10px #fff ;
+        }
+        #controls {
+            position: fixed;
+            right: 0;
+            top:0;
+            width: 500px;
+            height: 25px;
+            overflow: hidden;
+            z-index: 10;
+            background: white;
+            box-shadow: black;
+        }
+        #controls_handle {
+            background-color: #3a87ad;
+            width: 500px;
+            height: 25px;
+            line-height: 25px;
+            text-align: center;
+            color: white;
+        }
+        /* HR (horizontal rule with text */
+        .hr {
+            display: flex;
+            flex-basis: 100%;
+            align-items: center;
+            color: rgba(0, 0, 0, 0.35);
+            margin: 8px 0px;
+        }
+        .hr::before,
+        .hr::after {
+            content: "";
+            flex-grow: 1;
+            background: rgba(0, 0, 0, 0.35);
+            height: 1px;
+            font-size: 0px;
+            line-height: 0px;
+            margin: 0px 8px;
+        }
 
+        .progress {
+            width:100%;
+            background-color:#f1f1f1;
+            position:relative;
+            height:1.5em;
+            cursor: help;
+        }
+        .progress_label {
+            position:absolute;
+            z-index:2;
+            padding-left:10px;
+            line-height:1.5em;
+        }
+        .progress_bar {
+            height:100%;
+            position:absolute;
+        }
+
+        #follower {
+            margin:20px;
+            padding: 10px;
+            border-radius: 5px;
+            position: absolute;
+            z-index: 10;
+            background: white;
+            display: none;
+        }
+        .local {
+            /* daily target progress bar that is not cumulative, less important, less visible
+                this is a bad name and should be changed front and back side
+                local should be understood as local to today
+            */
+            opacity: 0.5
+        }
+        /* current event has fancy fade out, I thonk this is unnecessary */
+        .current_event {
+            border-bottom: 0;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        .current_event:after {
+            /*  http://stackoverflow.com/a/22666488/1472229 */
+            content  : "";
+            position : absolute;
+            z-index  : 1;
+            bottom   : 0;
+            left     : 0;
+            pointer-events   : none;
+            background-image : linear-gradient(to bottom,
+                rgba(252,248,227, 0),
+                rgba(252,248,227, 1) 100%);
+            width    : 100%;
+            height   : 1em;
+        }
+        /* Few anchors are used, they pretend to be buttons */
+        a {
+            text-decoration: none;
+            color: black;
+            font-weight: 900;
+            border: 1px solid navy;
+            border-radius: 3px;
+            padding: 2px;
+        }
+        a:hover {
+            background-color: yellow;
+            border: 1px solid red;
+        }
+        .with-comment {
+            border-left: 5px solid #2196F3 !important;
         }
 
     </style>
 </head>
 <body>
-
-<br>
 <div id="calendar"></div>
-<div id="more">
-    <a href="/admin" target="_blank">admin</a>
-    <hr>
-    {# FIXME: use % url % #}
-    <a href="/admin/core/timespan/add/" target="_blank">Add time span in admin.</a>
-    <a href="/admin/core/bucket/add/" target="_blank">Add bucket in admin.</a>
-    <hr>
-        <table class="mono switches-table">
-        {% for ts in running %}
-            <tr>
-                <td><a href="/stop/{{ ts.bucket.tag }}" class="color-button" style="background-color:{{ ts.bucket.color }};" target="_blank">Stop</a></td>
-                <td>{{ ts.bucket.tag }}</td>
-                <td>{{ ts.bucket.title|truncatechars:40 }}</td>
-            </tr>
+<br>
+<div id="controls">
+    <div id="controls_handle">hover here</div>
+    <div class="hr">admin</div>
+    <a class="color-button" href="{% url 'admin:index' %}" target="_blank">admin</a>
+    <a class="color-button" href="{% url 'admin:core_bucket_add' %}" target="_blank">+ bucket</a>
+    <a class="color-button" href="{% url 'admin:core_timespan_add' %}" target="_blank">+ timespan</a>
+    <div class="hr">running</div>
+    <div id="running">
+        {% for bucket in running %}
+            <div
+                data-href="/stop/{{ bucket.title }}"
+                data-title="{{ bucket.title }}"
+                class="color-button"
+                style="background-color:{{ bucket.color }}; color: {{ bucket.text_color }}"
+            >
+                {{ bucket.title|truncatechars:40 }}
+            </div>
         {% endfor %}
-            <tr><td style="padding-bottom: 20px;border:none"></td></tr>
+    </div>
+    <div class="hr">recently used</div>
+    <div id="recently_used">
         {% for bucket in recent %}
-            <tr>
-                <td><a href="/start/{{ bucket.tag }}" class="color-button" style="background-color:{{ bucket.color }};" target="_blank">Start</a></td>
-                <td>{{ bucket.tag }}</td>
-                <td>{{ bucket.title|truncatechars:40 }}</td>
-            </tr>
+            <div
+                data-href="/start/{{ bucket.title }}"
+                data-title="{{ bucket.title }}"
+                class="color-button"
+                style="background-color:{{ bucket.color }}; color: {{ bucket.text_color }}"
+            >
+                {{ bucket.title }}
+            </div>
         {% endfor %}
-        </table>
-    <div1 id="json" ></div1>
+    </div>
 </div>
-<div id="status">Status goes here</div>
+<div id="follower"></div>
 
 </body>
 </html>
