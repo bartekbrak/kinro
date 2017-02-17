@@ -26,7 +26,4 @@ INSTALLED_APPS = [
     # the only addition
     'django_extensions',
 ]
-
-
-# Let all models have the same, human-readable text representation, useful for shell_plus.
-models.Model.__repr__ = pretty_repr.indented_django_repr
+ALLOWED_HOSTS = ('kinro.lvh.me', '127.0.0.1')

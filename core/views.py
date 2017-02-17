@@ -33,7 +33,10 @@ def time_span_list(request):
             'url': reverse('admin:core_timespan_change', args=(instance.id, )),
             'bucket_url': reverse('admin:core_bucket_change', args=(instance.bucket.id, )),
             'rendering': 'background' if instance.bucket.type == Bucket.CLIENTS else '',
-            'className': 'current_event' if instance.id == running_id else '',
+            'className': [
+                'current_event' if instance.id == running_id else '',
+                'small' if (instance.get_end() - instance.start).total_seconds() < 900 else '',
+            ]
         } for instance in queryset
     ]
     return JsonResponse(data, safe=False)

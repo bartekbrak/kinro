@@ -362,6 +362,26 @@ $(document).ready(function() {
         .with-comment {
             border-left: 5px solid #2196F3 !important;
         }
+        .fc-event.small {
+            /* allows the trick below but text will overflow so we will hide it,
+               it is still available in hover/follower mechanism
+             */
+            overflow: visible !important;
+        }
+        .fc-event.small * {
+            font-size: 0 !important;
+        }
+        .fc-event.small::after {
+            content: "";
+            background-color: inherit;
+            position: absolute;
+            right: 10px;
+            width: 40px;
+            height: 10px;
+            top: -11px;
+            border-radius: 10px 10px 0 0;
+            opacity: 0.75;
+        }
 
     </style>
 </head>
