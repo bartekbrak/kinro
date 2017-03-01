@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>new layout</title>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.17.1/moment.js"></script>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    body {
+        background-color: #141414;
+    }
+    #main {
+        margin: auto 0;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+    }
+    .day {
+        width: 200px;
+        border: 1px solid #292929;
+        height: 90%;
+        position: relative;
+        background: repeating-linear-gradient(
+                0deg,
+                #141414,
+                #141414 calc(100% / 24),
+                #1f1d1d calc(100% / 24),
+                #1f1d1d calc(100% / 12)
+        );
+        float: left;
+        margin: 5px;
+        color: white;
+    }
+    .ts {
+        border: 1px solid;
+        width: 100%;
+        position: absolute;
+        box-sizing: border-box;
+        overflow: hidden;
+        padding: 5px;
+        cursor: pointer;
+        z-index: 20;
+    }
+    .has_comment {
+        border-left-width: 10px;
+
+    }
+    #follower {
+        margin:20px;
+        padding: 10px;
+        border-radius: 5px;
+        position: absolute;
+        z-index: 10;
+        background: white;
+        display: none;
+    }
+    #prev, #next {
+        position: fixed;
+        bottom: 5px;
+        height: 30px;
+        width: 100px;
+    }
+    #prev {
+        left:100px;
+    }
+    #next {
+        left:230px;
+    }
+
+</style>
+<script>
+let l = console.log;
+let seconds_in_day = 86400;
+let seconds_in_hour = 3600;
+let seconds_in_minute = 60;
+let displayedMonday = moment().startOf('isoWeek');
+
+$(document).ready(function() {
+    let follower = $('#follower');
+
+    let contrastiveColor = function (color) {
+        /* Buckets have colours, these colours are used as backgrounds. This function produces a font
+         color that will be visible on a given vackground color. Either black or white
+
+         http://stackoverflow.com/a/3943023/1472229
+         http://jsfiddle.net/cu4z27m7/66/
+         */
+        color = (color.charAt(0) == "#") ? color.substring(1, 7) : color;
+        let r = parseInt(color.substring(0, 2), 16);
+        let g = parseInt(color.substring(2, 4), 16);
+        let b = parseInt(color.substring(4, 6), 16);
+        let uicolors = [r / 255, g / 255, b / 255];
+        let c = uicolors.map((c) => {
+            if (c <= 0.03928) {
+                return c / 12.92;
+            } else {
+                return Math.pow((c + 0.055) / 1.055, 2.4);
+            }
+        });
+
+        const L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        return (L > 0.179) ? '#000000' : '#ffffff';
+    };
+
+    let color_luminance = function(hex, lum) {
+        // https://www.sitepoint.com/javascript-generate-lighter-darker-color/
+
+        // validate hex string
+        hex = String(hex).replace(/[^0-9a-f]/gi, '');
+        if (hex.length < 6) {
+            hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+        }
+        lum = lum || 0;
+
+        // convert to decimal and change luminosity
+        let rgb = "#", c, i;
+        for (i = 0; i < 3; i++) {
+            c = parseInt(hex.substr(i*2,2), 16);
+            c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
+            rgb += ("00"+c).substr(c.length);
+        }
+
+        return rgb;
+    };
+
+    let time_to_sec = function(time_str) {
+        hours = parseInt(time_str.slice(11, 13));
+        minutes = parseInt(time_str.slice(14, 16));
+        seconds = parseInt(time_str.slice(17, 19));
+        return seconds_in_hour * hours + seconds_in_minute * minutes + (seconds || 0)
+    };
+
+    let sec_to_offest = function(seconds) {
+        return `${seconds / seconds_in_day * 100}%`
+    };
+
+    let load = function (a_date) {
+        let begin = moment(a_date).startOf('isoWeek').format('YYYY-MM-DD');
+        let end = moment(a_date).endOf('isoWeek').format('YYYY-MM-DD');
+        let url = `http://kinro.lvh.me/time_spans/?start=${begin}&end=${end}`;
+        l(begin, end, url);
+        $.ajax({
+            url: url,
+            success: function( data ) {
+                $('div.day').text('').children('.ts').remove();
+                jQuery.each(data, function (index, ts) {
+                    let text = `${ts.start.substring(11, 16)} - ${ts.end.substring(11, 16)} ${ts.title}`;
+                    let duration = time_to_sec(ts.end) - time_to_sec(ts.start);
+                    ts.duration = duration;
+                    let height = sec_to_offest(duration);
+                    if (duration < 900) text = '';
+                    let div = $(`<div class='ts' >${text}</div>`);
+                    let date = ts.start.substring(0,10);
+                    let top = sec_to_offest(time_to_sec(ts.start));
+
+                    $(`div.day#d${moment(date).day()}`).text(moment(date).format('YYYY-MM-DD (dddd)')).append(div);
+                    div.css('top', top);
+                    div.css('height', height);
+                    div.css('background-color', ts.color);
+                    div.css('border-color', color_luminance(ts.color, 1));
+                    div.css('color', contrastiveColor(ts.color));
+                    div.data('full', ts);
+                    if (ts.comment) div.addClass('has_comment');
+                    if (ts.rendering == 'background') div.css('z-index', 10)
+                });
+            }
+        });
+    };
+
+    // jQuery events
+
+    $(document).on('mousemove', function(e){
+        $('#follower').css({
+            left:  e.pageX,
+            top:   e.pageY
+        });
+    });
+    $(document).on('mouseenter', '.ts', function (event) {
+        let data = $(event.currentTarget).data('full');
+        follower.html(`
+            ${data.start.substring(11, 16)} - ${data.end.substring(11, 16)}
+            (${moment.duration(data.duration, 'seconds').humanize()})
+            <br>
+            ${data.title}
+            ${data.comment? '' + data.comment : ''}
+        `).show();
+    }).on('mouseout', '.ts', function () {
+        follower.hide();
+    });
+    $('#prev').on('click', function () {
+        displayedMonday = displayedMonday.subtract(1, 'weeks');
+        load(displayedMonday);
+    });
+    $('#next').on('click', function () {
+        displayedMonday = displayedMonday.add(1, 'weeks');
+        load(displayedMonday);
+    });
+
+    load(displayedMonday);
+});
+
+</script>
+</head>
+<body>
+<div id="main">
+
+<div class='day' id=d1>Monday</div>
+<div class='day' id=d2></div>
+<div class='day' id=d3></div>
+<div class='day' id=d4></div>
+<div class='day' id=d5></div>
+<div class='day' id=d6></div>
+<!-- Sunday is zero -->
+<div class='day' id=d0></div>
+</div>
+<button id="prev">&lt;</button>
+<button id="next">&gt;</button>
+<div id="follower"></div>
+</body>
+</html>
