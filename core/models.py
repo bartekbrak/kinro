@@ -88,6 +88,8 @@ class TimeSpan(models.Model):
         DayCache.recalculate(self.start.date())
 
     def delete(self, using=None, keep_parents=False):
+        # FIXME: won't run if deleted from admin
+
         ret = super().delete(using, keep_parents)
         DayCache.recalculate(self.start.date())
         return ret
