@@ -147,7 +147,7 @@ $(document).ready(function() {
         $.ajax({
             url: url,
             success: function( data ) {
-                $('div.day').text('').children('.ts').remove();
+                $('div.day').children('.ts').remove();
                 jQuery.each(data, function (index, ts) {
                     let text = `${ts.start.substring(11, 16)} - ${ts.end.substring(11, 16)} ${ts.title}`;
                     let duration = time_to_sec(ts.end) - time_to_sec(ts.start);
@@ -158,7 +158,9 @@ $(document).ready(function() {
                     let date = ts.start.substring(0,10);
                     let top = sec_to_offest(time_to_sec(ts.start));
 
-                    $(`div.day#d${moment(date).day()}`).text(moment(date).format('YYYY-MM-DD (dddd)')).append(div);
+                    var $day = $(`div.day#d${moment(date).day()}`);
+                    $day.find('span.day_title').text(moment(date).format('YYYY-MM-DD (dddd)'));
+                    $day.append(div);
                     div.css('top', top);
                     div.css('height', height);
                     div.css('background-color', ts.color);
@@ -166,7 +168,7 @@ $(document).ready(function() {
                     div.css('color', contrastiveColor(ts.color));
                     div.data('full', ts);
                     if (ts.comment) div.addClass('has_comment');
-                    if (ts.rendering == 'background') div.css('z-index', 10)
+                    if (ts.rendering == 'background') div.css('z-index', 10);
                 });
             }
         });
@@ -209,12 +211,12 @@ $(document).ready(function() {
 <body>
 <div id="main">
 
-<div class='day' id=d1>Monday</div>
-<div class='day' id=d2></div>
-<div class='day' id=d3></div>
-<div class='day' id=d4></div>
-<div class='day' id=d5></div>
-<div class='day' id=d6></div>
+<div class='day' id=d1><span class="day_title"></span></div>
+<div class='day' id=d2><span class="day_title"></span></div>
+<div class='day' id=d3><span class="day_title"></span></div>
+<div class='day' id=d4><span class="day_title"></span></div>
+<div class='day' id=d5><span class="day_title"></span></div>
+<div class='day' id=d6><span class="day_title"></span></div>
 <!-- Sunday is zero -->
 <div class='day' id=d0></div>
 </div>
