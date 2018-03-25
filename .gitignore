@@ -4,3 +4,4 @@ __pycache__
 /venv
 local_settings.py
 *.py[cod]
+/backups

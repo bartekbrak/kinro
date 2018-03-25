@@ -3,26 +3,18 @@ from datetime import datetime, timedelta
 import markdown
 from django.conf import settings
 from django.db.models import Q
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.http import HttpResponse, JsonResponse, HttpResponseNotFound
+from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
 from django.utils.dateparse import parse_date
 
+from core.const import FOCUS_FACTOR
 from core.models import Bucket, DayCache, TimeSpan
-from core.utils import contrasting_text_color
+from core.utils import contrasting_text_color, date_range
 
 
-def time_span_list(request):
-    start = request.GET.get('start')
-    end = request.GET.get('end')
-    assert start and end, 'missing GET params'
-    # those fitting start-end and those in progress
-    queryset = TimeSpan.objects.filter(
-        Q(start__gte=start, end__lte=end) | Q(start__gte=start, end__isnull=True)
-    )
-    running = TimeSpan.objects.filter(bucket__type=Bucket.FOCUSED, end__isnull=True)
-    running_id = running.get().id if running else None
-    data = [
+def time_span_to_json(queryset, running_id=None):
+    return [
         {
             'start': instance.start,
             'end': instance.get_end(),
@@ -39,6 +31,18 @@ def time_span_list(request):
             ]
         } for instance in queryset
     ]
+
+
+def time_span_list(request):
+    start = request.GET.get('start')
+    end = request.GET.get('end')
+    assert start and end, 'missing GET params'
+    # those fitting start-end and those in progress
+    queryset = TimeSpan.objects.filter(
+        Q(start__gte=start, end__lte=end) | Q(start__gte=start, end__isnull=True)
+    )
+    running = TimeSpan.objects.filter(bucket__type=Bucket.FOCUSED, end__isnull=True)
+    data = time_span_to_json(queryset, running.get().id if running else None)
     return JsonResponse(data, safe=False)
 
 
@@ -55,7 +59,8 @@ def dashboard(request, start=None):
             id__in=[_.id for _ in running_buckets]
         ).order_by('-last_started'),
         'defaultDate': "'%s'" % start if start else 'null',
-        'title': running_focused.get().bucket.title if running_focused else ''
+        'title': running_focused.get().bucket.title if running_focused else '',
+        'FOCUS_FACTOR': FOCUS_FACTOR
     })
 
 
@@ -67,18 +72,18 @@ def toggle(request, title):
         return start_time_span(request, title)
 
 
-def start_time_span(request, title):
-    bucket = Bucket.objects.get(title=title)
+def start_time_span(request, id_):
+    bucket = Bucket.objects.get(id=id_)
     if TimeSpan.objects.filter(end__isnull=True, bucket__type=Bucket.FOCUSED).count():
         return HttpResponse("focused task already in progress, can't have two", status=400)
     TimeSpan.objects.create(start=datetime.now(), bucket=bucket)
     return HttpResponse('ok')
 
 
-def end_time_span(request, title):
+def end_time_span(request, id_):
     # FIXME: call it end_focused_task
-    if title:
-        open_span = TimeSpan.objects.filter(bucket__title=title).get(end__isnull=True)
+    if id_:
+        open_span = TimeSpan.objects.filter(bucket__id=id_).get(end__isnull=True)
     else:
         # or close latest focused
         open_span = TimeSpan.objects.filter(bucket__type=Bucket.FOCUSED).get(end__isnull=True)

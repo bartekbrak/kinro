@@ -1,5 +1,5 @@
 {% load static from static %}
-{# JS variant: ECMAScript 6, reuiqres modern browser. #}
+{# JS variant: ECMAScript 6, requires modern browser. #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,11 +17,11 @@
 
 let contrastiveColor = function (color) {
     /* Buckets have colours, these colours are used as backgrounds. This function produces a font
-    color that will be visible on a given vackground color. Either black or white
+       color that will be visible on a given background color. Either black or white.
 
-    http://stackoverflow.com/a/3943023/1472229
-     http://jsfiddle.net/cu4z27m7/66/
-     */
+       http://stackoverflow.com/a/3943023/1472229
+       http://jsfiddle.net/cu4z27m7/66/
+    */
     color = (color.charAt(0) == "#") ? color.substring(1, 7) : color;
     let r = parseInt(color.substring(0, 2), 16);
     let g = parseInt(color.substring(2, 4), 16);
@@ -38,6 +38,7 @@ let contrastiveColor = function (color) {
     const L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     return (L > 0.179) ? '#000000' : '#ffffff';
 };
+
 
 let human = function(s) {
     /* Convert seconds to hours and minutes, round down the leftover. Works with negative time too.
@@ -79,6 +80,13 @@ let progress_bar = function(done, planned, extra_classes, label='', bg_color='#a
             </div>
     `
 };
+
+var strip_tags_regex = /(<([^>]+)>)/ig
+let strip_tags = function(s) {
+    return s.replace(strip_tags_regex, "");
+}
+// hope there is some common mini-templating solution for this
+{% verbatim %}let curly_variable = /{{ (\w+) }}/;{% endverbatim %}
 
 $(document).ready(function() {
     /* follower is a tooltip like div that follows mouse and displays details about some objects */
@@ -154,6 +162,7 @@ $(document).ready(function() {
                     `
                 );
             });
+            // draw progress bars, local (this day only) and cumulative
             let start = view.start.format();
             let end = view.end.clone().subtract(1, 'days').format();
             $.ajax({
@@ -168,6 +177,8 @@ $(document).ready(function() {
                                 insight.done, insight.planned, ' local', insight.title,
                                 insight.color
                             ));
+                        } else if (insight.done) {
+                            header.append(`<br>${insight.title}: ${human(insight.done)}`);
                         }
                         if (insight.display) {
                             header.append(progress_bar(
@@ -176,19 +187,42 @@ $(document).ready(function() {
                             ));
                         }
                     });
+                    // Display focus factor
+                    if (buckets['ff']) {
+                        header.append(Number((buckets['ff']).toFixed(2)));
+                    }
                 });
             });
-            // Adding Insight progress bars changes callendar height, make it fit again
+            // Adding Insight progress bars changes calendar height, make it fit again
             $('#calendar').fullCalendar('option', 'height', $(window).height());
+
         },
         defaultDate: {{ defaultDate|safe }},
         eventRender: function( event, element, view ) {
             /*
-            Add comment class to timepsans with comments. I think there's some better way too,
+            Add comment class to timespans with comments. I think there's some better way too,
             maybe backend side
              */
+
+            if ( event.title.includes('{{') ) {
+                event.title = event.title.replace(curly_variable, function(match, p0) {
+                    return strip_tags(event[p0])
+                });
+                console.log('Found curly tag in bucket title, the result is :', event.title)
+                // strip HTML tags
+                element.find('.fc-title').text(event.title)
+            }
             if (event.comment) {
                 $(element).addClass('with-comment');
+            }
+            if (event.className.indexOf('current_event') > -1) {
+                let finish = event.start.clone().add(25, 'm');
+
+                console.log('Found an event in progress (current_event), time to finish:', moment.utc(finish.diff(moment())).format('mm:ss'))
+                setInterval(function() {
+                    let countdown = moment.utc(finish.diff(moment())).format('mm:ss');
+                    document.title = countdown;
+                }, 1000);
             }
         },
 
@@ -197,7 +231,7 @@ $(document).ready(function() {
     Controls is the bar with running buckets and some links.
     It's ugly. It works alright.
     When you start a bucket, it's best to refresh the page because the new event won't be added,
-    same with stopiing.
+    same with stopping.
     FIXME: add new events on click.
     FIXME: Display the tree of buckets, not just recent buckets.
      */
@@ -389,6 +423,7 @@ $(document).ready(function() {
 <div id="calendar"></div>
 <br>
 <div id="controls">
+    <div id="countdown"></div>
     <div id="controls_handle">hover here</div>
     <div class="hr">admin</div>
     <a class="color-button" href="{% url 'admin:index' %}" target="_blank">admin</a>
@@ -398,7 +433,7 @@ $(document).ready(function() {
     <div id="running">
         {% for bucket in running %}
             <div
-                data-href="/stop/{{ bucket.title }}"
+                data-href="/stop/{{ bucket.id }}"
                 data-title="{{ bucket.title }}"
                 class="color-button"
                 style="background-color:{{ bucket.color }}; color: {{ bucket.text_color }}"
@@ -411,7 +446,7 @@ $(document).ready(function() {
     <div id="recently_used">
         {% for bucket in recent %}
             <div
-                data-href="/start/{{ bucket.title }}"
+                data-href="/start/{{ bucket.id }}"
                 data-title="{{ bucket.title }}"
                 class="color-button"
                 style="background-color:{{ bucket.color }}; color: {{ bucket.text_color }}"

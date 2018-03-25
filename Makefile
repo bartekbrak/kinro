@@ -7,5 +7,5 @@ help:
 
 backup:
 	mkdir -p backups
-	cp db.sqlite3 backups/db.sqlite3.$$(date +%s)
+	cp db.sqlite3 backups/db.sqlite3.$$(date +%Y.%m.%d.%s)
 	tree backups

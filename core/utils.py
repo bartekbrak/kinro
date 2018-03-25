@@ -1,4 +1,9 @@
+import json
+import os
+from base64 import b64encode
 from datetime import timedelta
+from http.client import HTTPSConnection
+from random import randint
 
 
 def pairwise(iterable):
@@ -102,3 +107,31 @@ def draw_progress_bar(done, planned, label='', bg_color='#a9a9a9', extra_css='')
 
 def date_range(from_date, to_date):
     return [from_date + timedelta(days=d) for d in range(0, (to_date-from_date).days + 1)]
+
+
+def random_color():
+    return '#%02X%02X%02X' % (randint(0, 255), randint(0, 255), randint(0, 255))
+
+
+def bucket_from_jira(task_no: str, parent: int, url: str, auth: str):
+    """
+    create bucket from jira, sample:
+    bucket_from_jira('RB-10', 220, 'jira.softheart.io', 'bartek.rychlicki:________')
+    """
+    assert 'http' not in url
+    c = HTTPSConnection(url)
+    c.request(
+        'GET',
+        '/rest/api/latest/issue/%s' % task_no,
+        headers={
+            'Authorization': 'Basic %s' % b64encode(auth).decode("ascii")
+        }
+    )
+    data = json.loads(c.getresponse().read().decode('utf-8'))
+    from core.models import Bucket
+    return Bucket.objects.create(
+        parent=Bucket.objects.get(pk=parent),
+        title='%s: %s' % (task_no, data['fields']['summary']),
+        url='https://%s/browse/%s' % (url, task_no),
+        type=Bucket.FOCUSED
+    )

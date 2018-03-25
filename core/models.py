@@ -1,13 +1,14 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.db import models
 from mptt.fields import TreeForeignKey
 from mptt.models import MPTTModel
 
 from core.algorithms import merge_overlapping_spans
+from core.const import FOCUS_FACTOR
 from core.fields import ColorField
-from core.utils import contrasting_text_color, date_range
+from core.utils import contrasting_text_color, date_range, to_human_readable_in_hours, random_color
 
 
 class TimeSpanQuerySet(models.QuerySet):
@@ -18,17 +19,18 @@ class TimeSpanQuerySet(models.QuerySet):
 
         return: seconds
         """
+        # AttributeError: 'datetime.datetime' object has no attribute 'timestamp' when python2
         merged = merge_overlapping_spans(
             (ts.start.timestamp(), ts.get_end().timestamp()) for ts in self)
         return sum(b - a for a, b in merged)
 
     def focus_factor(self):
         # The idea is useful but I just need to think how to display it nicely after recent changes
-        raise DeprecationWarning
-        # merged_total = self.merged_total()
-        # if not merged_total:
-        #     return 0
-        # return self.filter(bucket__type=Bucket.FOCUSED).merged_total() / merged_total
+        # raise DeprecationWarning
+        merged_total = self.merged_total()
+        if not merged_total:
+            return 0
+        return self.filter(bucket__type=Bucket.FOCUSED).merged_total() / merged_total
 
 
 class TimeSpan(models.Model):
@@ -83,11 +85,17 @@ class TimeSpan(models.Model):
     def save(self, *args, **kwargs):
         # FIXME: check if delta does not span over midnight - one day only
         # sets bucket.last_started
+        if self.end and self.start.day != self.end.day:
+            raise ValueError(
+                "Working through midnight not allowed"
+            )
         self.bucket.save()
         super().save(*args, **kwargs)
         DayCache.recalculate(self.start.date())
 
     def delete(self, using=None, keep_parents=False):
+        # FIXME: won't run if deleted from admin
+
         ret = super().delete(using, keep_parents)
         DayCache.recalculate(self.start.date())
         return ret
@@ -113,13 +121,16 @@ class Bucket(MPTTModel):
     # in hours or whatever you like, might be used to set alarms, currently purely informational
     # FIXME: decimals, how to 4.5hrs here?
     estimate = models.FloatField(null=True, blank=True)
-    color = ColorField(max_length=7)
+    color = ColorField(max_length=7, default=random_color)
     # for simplicity of obtaining recent buckets, filled on TimeSpan.save
     last_started = models.DateTimeField(auto_now=True)
     type = models.CharField(max_length=10, choices=TYPES, default=FOCUSED, blank=True)
 
     class MPTTMeta:
         order_insertion_by = ['title']
+
+    class Meta:
+        unique_together = ('title', 'url')
 
     def __str__(self):
         return self.title
@@ -135,6 +146,10 @@ class Bucket(MPTTModel):
         return self.family_time_spans_q().filter(
             start__date=date
         ).merged_total()
+
+    @property
+    def done_tag(self):
+        return to_human_readable_in_hours(self.family_time_spans_q().merged_total())
 
     @property
     def text_color(self):
@@ -173,6 +188,7 @@ class DayCache(models.Model):
     """
 
     date = models.DateField()
+    # FIXME: NOT USED AT ALL
     previous = models.OneToOneField('self', null=True, blank=True, related_name='next')
     data_json = models.TextField()
 
@@ -190,7 +206,7 @@ class DayCache(models.Model):
     def data(self):
         if not self._data:
             # JSON does not allow integers as keys but I rally like them
-            self._data = {int(k): v for k, v in json.loads(self.data_json).items()}
+            self._data = {int(k) if k != FOCUS_FACTOR else k: v for k, v in json.loads(self.data_json).items()}
         return self._data
 
     @classmethod
@@ -207,7 +223,6 @@ class DayCache(models.Model):
         # FIXME: hardly readable, clean up
         cls.invalidate(since)
         previous = cls.objects.order_by('date').last()
-        print('previous', previous)
         all_dts = DailyTarget.objects.all().order_by('date')
         if not all_dts:
             return
@@ -220,15 +235,14 @@ class DayCache(models.Model):
             targets_index[dt.date][dt.bucket.id] = dt
 
         for a_date in date_range(since, latest):
-            print(a_date)
             this_day = {}
             if a_date in targets_index:
                 for target in targets_index[a_date].values():
                     bucket = target.bucket
                     done = bucket.done(a_date)
-                    if previous:
-                        for i, j in previous.data.items():
-                            print('previous.data', i, j)
+                    # if previous:
+                    #     for i, j in previous.data.items():
+                    #         print('previous.data', i, j)
                     if previous and not target.fresh_start and bucket.id in previous.data:
                         pb = previous.data[bucket.id]
                         done_cumulative = pb['done_cumulative'] + done
@@ -257,6 +271,9 @@ class DayCache(models.Model):
                 unfinished_targets = set(previous.data.keys()) - set(this_day.keys())
 
                 for bucket_id in unfinished_targets:
+                    # laughable hack
+                    if bucket_id == FOCUS_FACTOR:
+                        continue
                     pb = previous.data[bucket_id]
                     bucket = Bucket.objects.get(id=bucket_id)
                     done_today = bucket.done(a_date)
@@ -274,10 +291,12 @@ class DayCache(models.Model):
                             'display': worked_on_it_today,
                             'color': bucket.color,
                             'title': bucket.title,
+                            'done': done_today,
                             'done_cumulative': done_cumulative,
                             'planned_cumulative': planned_cumulative,
                         }
             if this_day:
+                this_day[FOCUS_FACTOR] = TimeSpan.objects.filter(start__date=a_date).focus_factor()
                 dc = DayCache(date=a_date, previous=previous)
                 dc.data = this_day
                 previous = dc
