@@ -5,3 +5,4 @@ __pycache__
 local_settings.py
 *.py[cod]
 /backups
+db.sqlite3

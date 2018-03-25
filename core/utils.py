@@ -5,6 +5,8 @@ from datetime import timedelta
 from http.client import HTTPSConnection
 from random import randint
 
+from django.utils.safestring import mark_safe
+
 
 def pairwise(iterable):
     """s -> (s0, s1), (s2, s3), (s4, s5), ..."""
@@ -95,14 +97,14 @@ def draw_progress_bar(done, planned, label='', bg_color='#a9a9a9', extra_css='')
         balance=to_human_readable_in_hours(int(balance)),
     )
     color = contrasting_text_color(bg_color)
-    return '''
+    return mark_safe('''
     <div class="progress" style="{extra_css}" title="{hover}">
         <div class="progress_label" style="color:{color}">{label}</div>
         <div class="progress_bar" style="width:{width}%; background-color:{bg_color}"></div>
       </div>
     '''.format(
         label=label, width=capped_progress, hover=hover, bg_color=bg_color,
-        color=color, extra_css=extra_css)
+        color=color, extra_css=extra_css))
 
 
 def date_range(from_date, to_date):

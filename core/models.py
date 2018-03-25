@@ -1,7 +1,8 @@
 import json
-from datetime import datetime
 
 from django.db import models
+from django.db.models import CASCADE
+from django.utils.timezone import now
 from mptt.fields import TreeForeignKey
 from mptt.models import MPTTModel
 
@@ -61,7 +62,7 @@ class TimeSpan(models.Model):
     # Now that we link against a day, is TimeField would be better than DateTimeField
     start = models.DateTimeField()
     end = models.DateTimeField(null=True, blank=True)
-    bucket = TreeForeignKey('Bucket')
+    bucket = TreeForeignKey('Bucket', on_delete=CASCADE)
     comment = models.TextField(null=True, blank=True)
 
     objects = TimeSpanQuerySet.as_manager()
@@ -80,7 +81,7 @@ class TimeSpan(models.Model):
 
     def get_end(self):
         """If the span hasn't finished, for calculations' reasons, pretend it's finished now."""
-        return self.end or datetime.now()
+        return self.end or now()
 
     def save(self, *args, **kwargs):
         # FIXME: check if delta does not span over midnight - one day only
@@ -149,6 +150,7 @@ class Bucket(MPTTModel):
 
     @property
     def done_tag(self):
+        # date?
         return to_human_readable_in_hours(self.family_time_spans_q().merged_total())
 
     @property
@@ -189,7 +191,7 @@ class DayCache(models.Model):
 
     date = models.DateField()
     # FIXME: NOT USED AT ALL
-    previous = models.OneToOneField('self', null=True, blank=True, related_name='next')
+    previous = models.OneToOneField('self', null=True, blank=True, related_name='next', on_delete=CASCADE)
     data_json = models.TextField()
 
     _data = None
@@ -205,7 +207,7 @@ class DayCache(models.Model):
     @data.getter
     def data(self):
         if not self._data:
-            # JSON does not allow integers as keys but I rally like them
+            # JSON does not allow integers as keys but I really like them
             self._data = {int(k) if k != FOCUS_FACTOR else k: v for k, v in json.loads(self.data_json).items()}
         return self._data
 

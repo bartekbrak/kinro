@@ -20,6 +20,7 @@ def ts(day, hour, bucket):
         bucket=bucket
     )
 
+
 class InsightTests(TestCase):
     def test_test(self):
         """Start two targets, do some work on one. Next day, do some on the second. Third, on first

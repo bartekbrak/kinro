@@ -20,6 +20,7 @@ class TimeSpanAdmin(admin.ModelAdmin):
     formfield_overrides = {
         models.TextField: {'widget': Textarea(attrs={'rows': 4, 'cols': 40})},
     }
+    autocomplete_fields = ['bucket']
 
     def display(self, obj):
         return '{obj.start:%Y:%m-%d %H:%M}-{end}'.format(
@@ -63,6 +64,7 @@ class BucketAdmin(DraggableMPTTAdmin):
     inlines = [
         TimeSpanInline,
     ]
+    search_fields = ['title']
 
     def local_total(self, obj):
         count = obj.timespan_set.count()
@@ -73,7 +75,7 @@ class BucketAdmin(DraggableMPTTAdmin):
 
     def display_color(self, obj):
         """Color box as a column."""
-        return (
+        return mark_safe(
             '<div style="'
             'width:50px;background-color:%s;position:relative;height:1.5em'
             '"></div>' % obj.color
