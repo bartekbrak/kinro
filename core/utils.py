@@ -1,5 +1,4 @@
 import json
-import os
 from base64 import b64encode
 from datetime import timedelta
 from http.client import HTTPSConnection

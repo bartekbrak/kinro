@@ -1,5 +1,6 @@
-import core.utils
 from django.db import migrations
+
+import core.utils
 
 
 class Migration(migrations.Migration):

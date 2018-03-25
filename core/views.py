@@ -3,14 +3,14 @@ from datetime import datetime, timedelta
 import markdown
 from django.conf import settings
 from django.db.models import Q
-from django.http import HttpResponse, JsonResponse, HttpResponseNotFound
-from django.shortcuts import render, get_object_or_404
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.urls import reverse
 from django.utils.dateparse import parse_date
 
 from core.const import FOCUS_FACTOR
 from core.models import Bucket, DayCache, TimeSpan
-from core.utils import contrasting_text_color, date_range
+from core.utils import contrasting_text_color
 
 
 def time_span_to_json(queryset, running_id=None):

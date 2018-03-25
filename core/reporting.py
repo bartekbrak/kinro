@@ -4,11 +4,11 @@ primitive reporing for shell_plus
 - TODO: describe
 - TODO: dry
 """
+from collections import defaultdict
 from datetime import datetime
 
 from core.models import Bucket
 from core.utils import to_human_readable_in_hours as human
-from collections import defaultdict
 
 
 def report_a_day(day=datetime.today().strftime('%Y-%m-%d'), split_names=('food', )):
@@ -45,7 +45,12 @@ def report_a_day(day=datetime.today().strftime('%Y-%m-%d'), split_names=('food',
                 human(non_task)
             )
         )
-        only_tasks = {k: v for k, v in seconds.items() if k not in ('all', 'task') and k[1] != 'url not specified'}
+        only_tasks = {
+            k: v
+            for k, v
+            in seconds.items()
+            if k not in ('all', 'task') and k[1] != 'url not specified'
+        }
         per_task = non_task / len(only_tasks)
         print('each got +%s' % human(per_task))
         for (bucket_id, bucket_url, bucket_title), task_seconds in only_tasks.items():
@@ -68,7 +73,10 @@ def report_month(year, month):
         if bucket.type == 'client':
             client_generic[bucket.title] += seconds
         if bucket.url:
-            client_title = cache.setdefault(bucket.id, Bucket.objects.get(id=bucket.id).get_ancestors().filter(type='client').get().title)
+            client_title = cache.setdefault(
+                bucket.id, Bucket.objects.get(
+                    id=bucket.id).get_ancestors().filter(type='client').get().title
+            )
             client_generic[client_title] -= seconds
         hr = human(seconds)
         print('%4.4s %-6.6s %40.40s : %-60.60s' % (bucket.id, hr, bucket.url, bucket.title))

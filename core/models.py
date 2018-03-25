@@ -9,7 +9,7 @@ from mptt.models import MPTTModel
 from core.algorithms import merge_overlapping_spans
 from core.const import FOCUS_FACTOR
 from core.fields import ColorField
-from core.utils import contrasting_text_color, date_range, to_human_readable_in_hours, random_color
+from core.utils import contrasting_text_color, date_range, random_color, to_human_readable_in_hours
 
 
 class TimeSpanQuerySet(models.QuerySet):
@@ -191,7 +191,8 @@ class DayCache(models.Model):
 
     date = models.DateField()
     # FIXME: NOT USED AT ALL
-    previous = models.OneToOneField('self', null=True, blank=True, related_name='next', on_delete=CASCADE)
+    previous = models.OneToOneField(
+        'self', null=True, blank=True, related_name='next', on_delete=CASCADE)
     data_json = models.TextField()
 
     _data = None
@@ -208,7 +209,11 @@ class DayCache(models.Model):
     def data(self):
         if not self._data:
             # JSON does not allow integers as keys but I really like them
-            self._data = {int(k) if k != FOCUS_FACTOR else k: v for k, v in json.loads(self.data_json).items()}
+            self._data = {
+                int(k) if k != FOCUS_FACTOR else k: v
+                for k, v
+                in json.loads(self.data_json).items()
+            }
         return self._data
 
     @classmethod
@@ -282,7 +287,7 @@ class DayCache(models.Model):
                     done_cumulative = done_today + pb['done_cumulative']
                     planned_cumulative = pb['planned_cumulative']
                     # Drop tracking targets that were finished.
-                    was_not_finished_yesterday = pb['done_cumulative'] < pb['planned_cumulative']
+                    # was_not_finished_yesterday = pb['done_cumulative'] < pb['planned_cumulative']
                     # was_not_finished_today = done_cumulative < planned_cumulative
                     worked_on_it_today = bool(done_today)
                     if True:

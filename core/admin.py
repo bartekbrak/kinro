@@ -2,17 +2,16 @@
 I treat admin like part of the application, some things you can only do there.
 """
 from django.contrib import admin
-from django.utils.safestring import mark_safe
-
 from django.contrib.auth.models import Group, User
 from django.db import models
-from django.forms import Textarea, TextInput, fields, ModelForm, CharField
+from django.forms import CharField, ModelForm, Textarea, TextInput
+from django.utils.safestring import mark_safe
 from mptt.admin import DraggableMPTTAdmin
+from pytimeparse import parse as to_seconds
 
 from core.fields import ColorField
 from core.models import Bucket, DailyTarget, TimeSpan
 from core.utils import draw_progress_bar, to_human_readable_in_hours
-from pytimeparse import parse as to_seconds
 
 
 class TimeSpanAdmin(admin.ModelAdmin):
@@ -59,7 +58,7 @@ class BucketAdmin(DraggableMPTTAdmin):
         'indented_title',
     )
     formfield_overrides = {
-        ColorField: {'widget': TextInput(attrs={'type':'color'})},
+        ColorField: {'widget': TextInput(attrs={'type': 'color'})},
     }
     inlines = [
         TimeSpanInline,
@@ -103,9 +102,12 @@ class BucketAdmin(DraggableMPTTAdmin):
 
     def timespans(self, obj):
         # performance killer, debug only
-        return '<br>'.join('%s - %s' % (s.strftime('%m.%d %H:%M'), e.strftime('%m.%d %H:%M')) for s, e in obj.timespan_set.all().values_list('start', 'end'))
+        return '<br>'.join(
+            '%s - %s' % (s.strftime('%m.%d %H:%M'), e.strftime('%m.%d %H:%M'))
+            for s, e
+            in obj.timespan_set.all().values_list('start', 'end')
+        )
     timespans.allow_tags = True
-
 
 
 class DailyTargetAdminForm(ModelForm):
@@ -131,6 +133,7 @@ class DailyTargetAdmin(admin.ModelAdmin):
     def display_amount(self, obj):
         return to_human_readable_in_hours(obj.amount)
     display_amount.short_description = 'target'
+
 
 admin.site.register(TimeSpan, TimeSpanAdmin)
 admin.site.register(Bucket, BucketAdmin)

@@ -10,8 +10,8 @@ from django.urls import reverse
 
 from core.models import Bucket, DailyTarget, DayCache, TimeSpan
 
-
 # factories
+
 
 def ts(day, hour, bucket):
     return TimeSpan(
