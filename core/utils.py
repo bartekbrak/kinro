@@ -1,10 +1,13 @@
 import json
+import logging
 from base64 import b64encode
 from datetime import timedelta
 from http.client import HTTPSConnection
 from random import randint
 
 from django.utils.safestring import mark_safe
+
+log = logging.getLogger('general')
 
 
 def pairwise(iterable):
@@ -51,6 +54,12 @@ def to_human_readable_in_hours(seconds):
     h, m = divmod(m, 60)
     return "%s%d:%02d" % (sign, h, m)
 
+def to_human_readable_in_hours_jira(seconds):
+    sign = ''
+    if seconds < 0:
+        sign = '-'
+        seconds = abs(seconds)
+    return "%s%02d" % (sign, seconds / 60 / 60)
 
 def mean(numbers):
     return float(sum(numbers)) / max(len(numbers), 1)

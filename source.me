@@ -1,0 +1,31 @@
+# source this in ~/.bashrc
+
+test -z $KI_VENV_BIN && echo set KI_VENV_BIN, like "export KI_VENV_BIN=~/.pyenv/versions/kinro/bin"
+test -z $GITLAB_USER && echo set GITLAB_USER, like "export GITLAB_USER=bartek.rychlicki@gmail.com"
+test -z $GITLAB_PASS && echo set GITLAB_PASS, like "export GITLAB_PASS=hasło"
+
+# https://stackoverflow.com/a/246128
+KI_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+ki.test() {
+    (cd $KI_DIR; $KI_VENV_BIN/py.test "$@")
+}
+ki.back() {
+    $KI_VENV_BIN/python $KI_DIR/manage.py runserver "$@"
+}
+ki.manage() {
+    $KI_VENV_BIN/python $KI_DIR/manage.py "$@"
+}
+# django bash comletions required in /etc/bash_completion.d/django_bash_completion
+complete -F _django_completion -o default ki.manage
+
+ki.front() {
+    (cd $KI_DIR/frontend; yarn start "$@")
+}
+ki.shell() {
+    $KI_VENV_BIN/python $KI_DIR/manage.py shell_plus "$@"
+}
+ki.db() {
+    $KI_VENV_BIN/pgcli kinro "$@"
+}
+alias cdki="cd $KI_DIR"

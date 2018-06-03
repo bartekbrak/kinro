@@ -5,11 +5,12 @@ from django.db.models import CASCADE
 from django.utils.timezone import now
 from mptt.fields import TreeForeignKey
 from mptt.models import MPTTModel
+from tqdm import tqdm
 
 from core.algorithms import merge_overlapping_spans
 from core.const import FOCUS_FACTOR
 from core.fields import ColorField
-from core.utils import contrasting_text_color, date_range, random_color, to_human_readable_in_hours
+from core.utils import contrasting_text_color, date_range, log, random_color
 
 
 class TimeSpanQuerySet(models.QuerySet):
@@ -20,10 +21,8 @@ class TimeSpanQuerySet(models.QuerySet):
 
         return: seconds
         """
-        # AttributeError: 'datetime.datetime' object has no attribute 'timestamp' when python2
-        merged = merge_overlapping_spans(
-            (ts.start.timestamp(), ts.get_end().timestamp()) for ts in self)
-        return sum(b - a for a, b in merged)
+        merged = merge_overlapping_spans((ts.start, ts.end) for ts in self)
+        return sum(end - start for start, end in merged)
 
     def focus_factor(self):
         # The idea is useful but I just need to think how to display it nicely after recent changes
@@ -32,6 +31,15 @@ class TimeSpanQuerySet(models.QuerySet):
         if not merged_total:
             return 0
         return self.filter(bucket__type=Bucket.FOCUSED).merged_total() / merged_total
+
+    def done_on_day(self, date, bucket, include_self=True):
+        # casting bool to int used, have me or kill me
+        return self.filter(
+            start__date=date,
+            bucket__lft__gte=bucket.lft + (not include_self),
+            bucket__rght__lte=bucket.rght - (not include_self),
+            bucket__tree_id=bucket.tree_id,
+        ).merged_total()
 
 
 class TimeSpan(models.Model):
@@ -62,7 +70,7 @@ class TimeSpan(models.Model):
     # Now that we link against a day, is TimeField would be better than DateTimeField
     start = models.DateTimeField()
     end = models.DateTimeField(null=True, blank=True)
-    bucket = TreeForeignKey('Bucket', on_delete=CASCADE)
+    bucket = TreeForeignKey('Bucket', on_delete=CASCADE, related_name='timespans')
     comment = models.TextField(null=True, blank=True)
 
     objects = TimeSpanQuerySet.as_manager()
@@ -85,11 +93,11 @@ class TimeSpan(models.Model):
 
     def save(self, *args, **kwargs):
         # FIXME: check if delta does not span over midnight - one day only
-        # sets bucket.last_started
         if self.end and self.start.day != self.end.day:
             raise ValueError(
                 "Working through midnight not allowed"
             )
+        # sets bucket.last_started
         self.bucket.save()
         super().save(*args, **kwargs)
         DayCache.recalculate(self.start.date())
@@ -101,6 +109,15 @@ class TimeSpan(models.Model):
         DayCache.recalculate(self.start.date())
         return ret
 
+class BucketQuerySet(models.QuerySet):
+    def done_on_day(self, date, bucket, include_self=True):
+        # casting bool to int used, have me or kill me
+        return self.filter(
+            timespans__start__date=date,
+            lft__gte=bucket.lft + (not include_self),
+            rght__lte=bucket.rght - (not include_self),
+            tree_id=bucket.tree_id,
+        ).timespans.merged_total()
 
 class Bucket(MPTTModel):
     """
@@ -149,11 +166,6 @@ class Bucket(MPTTModel):
         ).merged_total()
 
     @property
-    def done_tag(self):
-        # date?
-        return to_human_readable_in_hours(self.family_time_spans_q().merged_total())
-
-    @property
     def text_color(self):
         return contrasting_text_color(self.color)
 
@@ -166,7 +178,7 @@ class DailyTarget(models.Model):
        other buckets.
      """
     date = models.DateField(null=True)
-    bucket = TreeForeignKey('Bucket', on_delete=models.PROTECT)
+    bucket = TreeForeignKey('Bucket', on_delete=models.PROTECT, related_name='targets')
     amount = models.PositiveIntegerField()
     fresh_start = models.BooleanField(default=False)
 
@@ -223,30 +235,49 @@ class DayCache(models.Model):
 
     @classmethod
     def recalculate_all(cls):
-        cls.recalculate(DailyTarget.objects.all().order_by('date').first().date)
+        date = DailyTarget.objects.all().order_by('date').first().date
+        cls.recalculate(date)
 
     @classmethod
+    # @profile
     def recalculate(cls, since):
-        # FIXME: hardly readable, clean up
+        # a change today means all cache today and in the future goes to bin
         cls.invalidate(since)
+        # there's a field in DayCache named so but this overrides it.
+        # this is slow
         previous = cls.objects.order_by('date').last()
         all_dts = DailyTarget.objects.all().order_by('date')
+        # model unused, do nothing, some users don't set that at all
         if not all_dts:
             return
         latest_target = all_dts.last().date
-        last_span = TimeSpan.objects.order_by('start').last().start.date()
+        # by convention, here, the date is most important, not whole object
+        last_span = TimeSpan.objects.order_by('start').last()
+        if not last_span:
+            log.debug('not last_span: %s', since)
+            return
+        else:
+            log.critical('last_span: %s', last_span.start.date())
+            pass
+        last_span = last_span.start.date()
+        # we either stop at latest time span or latest day cache (for those who set them in advance)
         latest = max(latest_target, last_span)
-        targets_index = {}
-        for dt in DailyTarget.objects.filter(date__gte=since):
-            targets_index.setdefault(dt.date, {})
-            targets_index[dt.date][dt.bucket.id] = dt
+        # targets_by_date = {}
+        # for dt in DailyTarget.objects.prefetch_related('bucket').filter(date__gte=since):
+        #     targets_by_date.setdefault(dt.date, {dt.bucket.id: dt})
+        targets_by_date = {}
+        for b in Bucket._default_manager.select_related('targets', 'timespans').all():
+            for dt in b.targets.all():
+                targets_by_date.setdefault(dt.date, {b.id: (dt, b.timespans.done_on_day(dt.date, b))})
+        # return
 
-        for a_date in date_range(since, latest):
+        for a_date in tqdm(date_range(since, latest)):
             this_day = {}
-            if a_date in targets_index:
-                for target in targets_index[a_date].values():
+            if a_date in targets_by_date:
+                for target, done in targets_by_date[a_date].values():
                     bucket = target.bucket
-                    done = bucket.done(a_date)
+                    # done = bucket.done(a_date)
+                    done = 4
                     # if previous:
                     #     for i, j in previous.data.items():
                     #         print('previous.data', i, j)
@@ -302,9 +333,9 @@ class DayCache(models.Model):
                             'done_cumulative': done_cumulative,
                             'planned_cumulative': planned_cumulative,
                         }
-            if this_day:
-                this_day[FOCUS_FACTOR] = TimeSpan.objects.filter(start__date=a_date).focus_factor()
-                dc = DayCache(date=a_date, previous=previous)
-                dc.data = this_day
-                previous = dc
-                dc.save()
+            # if this_day:
+            #     this_day[FOCUS_FACTOR] = TimeSpan.objects.filter(start__date=a_date).focus_factor()
+            #     dc = DayCache(date=a_date, previous=previous)
+            #     dc.data = this_day
+            #     previous = dc
+            #     dc.save()

@@ -1,6 +1,8 @@
 from django.conf.urls import url
 from django.contrib import admin
+from django.urls import include
 
+import settings
 from core import views
 
 urlpatterns = [
@@ -17,5 +19,11 @@ urlpatterns = [
 
     url(r'^admin/', admin.site.urls),
     # experiments
-    url(r'^tree/$', views.tree, name='tree'),
+    url(r'^recalculate_all/$', views.recalculate_all, name='recalculate_all'),
 ]
+
+if settings.DEBUG:
+    import debug_toolbar
+    urlpatterns = [
+                      url(r'^__debug__/', include(debug_toolbar.urls)),
+                  ] + urlpatterns

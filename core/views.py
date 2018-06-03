@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from time import time
 
 import markdown
 from django.conf import settings
@@ -14,6 +15,7 @@ from core.utils import contrasting_text_color
 
 
 def time_span_to_json(queryset, running_id=None):
+    # used by fullcalendar to draw boxes
     return [
         {
             'start': instance.start,
@@ -34,6 +36,7 @@ def time_span_to_json(queryset, running_id=None):
 
 
 def time_span_list(request):
+    # not used, probably some old experiment
     start = request.GET.get('start')
     end = request.GET.get('end')
     assert start and end, 'missing GET params'
@@ -103,5 +106,8 @@ def insight(request, start, end):
     }, safe=False)
 
 
-def tree(request):
-    return render(request, 'core/tree.html')
+def recalculate_all(request):
+    start = time()
+    DayCache.recalculate_all()
+    end = time()
+    return render(request, 'core/recalculate_all.html', context={'elapsed': '%.2f' % (end - start)})

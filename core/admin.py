@@ -66,10 +66,10 @@ class BucketAdmin(DraggableMPTTAdmin):
     search_fields = ['title']
 
     def local_total(self, obj):
-        count = obj.timespan_set.count()
+        count = obj.timespans.count()
         if not count:
             return ''
-        merged = obj.timespan_set.merged_total()
+        merged = obj.timespans.merged_total()
         return '%s (%s)' % (to_human_readable_in_hours(merged), count)
 
     def display_color(self, obj):
@@ -91,21 +91,21 @@ class BucketAdmin(DraggableMPTTAdmin):
         estimate = obj.estimate
         if not estimate:
             return ''
-        merged = obj.timespan_set.merged_total()
+        merged = obj.timespans.merged_total()
         return draw_progress_bar(merged, obj.estimate)
 
     progress_bar.allow_tags = True
 
     def get_queryset(self, request):
         qs = super(BucketAdmin, self).get_queryset(request)
-        return qs.prefetch_related('timespan_set')
+        return qs.prefetch_related('timespans')
 
     def timespans(self, obj):
         # performance killer, debug only
         return '<br>'.join(
             '%s - %s' % (s.strftime('%m.%d %H:%M'), e.strftime('%m.%d %H:%M'))
             for s, e
-            in obj.timespan_set.all().values_list('start', 'end')
+            in obj.timespans.all().values_list('start', 'end')
         )
     timespans.allow_tags = True
 
